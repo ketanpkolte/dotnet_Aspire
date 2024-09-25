@@ -143,9 +143,9 @@ internal sealed class ApplicationExecutor(ILogger<ApplicationExecutor> logger,
 
             await CreateServicesAsync(cancellationToken).ConfigureAwait(false);
 
-            await CreateContainerNetworksAsync(_dcpInfo, cancellationToken).ConfigureAwait(false);
+            await CreateContainerNetworksAsync(cancellationToken).ConfigureAwait(false);
 
-            await CreateContainersAndExecutablesAsync(_dcpInfo, cancellationToken).ConfigureAwait(false);
+            await CreateContainersAndExecutablesAsync(cancellationToken).ConfigureAwait(false);
 
             var afterResourcesCreatedEvent = new AfterResourcesCreatedEvent(serviceProvider, _model);
             await eventing.PublishAsync(afterResourcesCreatedEvent, cancellationToken).ConfigureAwait(false);
@@ -936,7 +936,6 @@ internal sealed class ApplicationExecutor(ILogger<ApplicationExecutor> logger,
                     distributedApplicationLogger.LogWarning("Unable to allocate a network port for service '{ServiceName}'; service may be unreachable and its clients may not work properly.", sar.Service.Metadata.Name);
                 }
             }
-
         }
         finally
         {
@@ -944,22 +943,19 @@ internal sealed class ApplicationExecutor(ILogger<ApplicationExecutor> logger,
         }
     }
 
-    private async Task CreateContainerNetworksAsync(DcpInfo dcpInfo, CancellationToken cancellationToken)
+    private async Task CreateContainerNetworksAsync(CancellationToken cancellationToken)
     {
-        if (dcpInfo.Containers?.Running == true)
+        var toCreate = _appResources.Where(r => r.DcpResource is ContainerNetwork);
+        foreach (var containerNetwork in toCreate)
         {
-            var toCreate = _appResources.Where(r => r.DcpResource is ContainerNetwork);
-            foreach (var containerNetwork in toCreate)
+            if (containerNetwork.DcpResource is ContainerNetwork cn)
             {
-                if (containerNetwork.DcpResource is ContainerNetwork cn)
-                {
-                    await kubernetesService.CreateAsync(cn, cancellationToken).ConfigureAwait(false);
-                }
+                await kubernetesService.CreateAsync(cn, cancellationToken).ConfigureAwait(false);
             }
         }
     }
 
-    private async Task CreateContainersAndExecutablesAsync(DcpInfo dcpInfo, CancellationToken cancellationToken)
+    private async Task CreateContainersAndExecutablesAsync(CancellationToken cancellationToken)
     {
         var startContainers = _dcpInfo?.Containers?.Running == true;
 
@@ -974,7 +970,7 @@ internal sealed class ApplicationExecutor(ILogger<ApplicationExecutor> logger,
             await lifecycleHook.AfterEndpointsAllocatedAsync(_model, cancellationToken).ConfigureAwait(false);
         }
 
-        var containersTask = CreateContainersAsync(toCreate.Where(ar => ar.DcpResource is Container), dcpInfo, cancellationToken);
+        var containersTask = CreateContainersAsync(toCreate.Where(ar => ar.DcpResource is Container), cancellationToken);
         
         var executablesTask = CreateExecutablesAsync(toCreate.Where(ar => ar.DcpResource is Executable || ar.DcpResource is ExecutableReplicaSet), cancellationToken);
 
@@ -1504,7 +1500,7 @@ internal sealed class ApplicationExecutor(ILogger<ApplicationExecutor> logger,
         }
     }
 
-    private Task CreateContainersAsync(IEnumerable<AppResource> containerResources, DcpInfo dcpInfo, CancellationToken cancellationToken)
+    private Task CreateContainersAsync(IEnumerable<AppResource> containerResources, CancellationToken cancellationToken)
     {
         try
         {
@@ -1528,7 +1524,7 @@ internal sealed class ApplicationExecutor(ILogger<ApplicationExecutor> logger,
 
                 try
                 {
-                    await CreateContainerAsync(cr, dcpInfo, logger, cancellationToken).ConfigureAwait(false);
+                    await CreateContainerAsync(cr, logger, cancellationToken).ConfigureAwait(false);
                 }
                 catch (FailedToApplyEnvironmentException)
                 {
@@ -1570,7 +1566,7 @@ internal sealed class ApplicationExecutor(ILogger<ApplicationExecutor> logger,
         }
     }
 
-    private async Task CreateContainerAsync(AppResource cr, DcpInfo dcpInfo, ILogger resourceLogger, CancellationToken cancellationToken)
+    private async Task CreateContainerAsync(AppResource cr, ILogger resourceLogger, CancellationToken cancellationToken)
     {
         if (cr.ModelResource is IResourceWithConnectionString)
         {
@@ -1737,14 +1733,7 @@ internal sealed class ApplicationExecutor(ILogger<ApplicationExecutor> logger,
             throw new FailedToApplyEnvironmentException();
         }
 
-        if (IsContainerRuntimeHealthy(_options.Value, dcpInfo, out var containerRuntimeError))
-        {
-            await kubernetesService.CreateAsync(dcpContainerResource, cancellationToken).ConfigureAwait(false);
-        }
-        else
-        {
-            throw new DistributedApplicationException(containerRuntimeError);
-        }
+        await kubernetesService.CreateAsync(dcpContainerResource, cancellationToken).ConfigureAwait(false);
     }
 
     private void EnsureDcpContainerRuntime(DcpInfo dcpInfo)
