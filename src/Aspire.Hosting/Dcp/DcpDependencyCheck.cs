@@ -200,24 +200,24 @@ internal sealed partial class DcpDependencyCheck : IDcpDependencyCheckService
             var running = dcpInfo.Containers?.Running ?? false;
             var error = dcpInfo.Containers?.Error;
 
-            if (!installed)
-            {
-                throw new DistributedApplicationException(string.Format(
-                    CultureInfo.InvariantCulture,
-                    Resources.ContainerRuntimePrerequisiteMissingExceptionMessage,
-                    containerRuntime,
-                    error
-                ));
-            }
-            else if (!running)
-            {
-                throw new DistributedApplicationException(string.Format(
-                    CultureInfo.InvariantCulture,
-                    Resources.ContainerRuntimeUnhealthyExceptionMessage,
-                    containerRuntime,
-                    error
-                ));
-            }
+            //if (!installed)
+            //{
+            //    throw new DistributedApplicationException(string.Format(
+            //        CultureInfo.InvariantCulture,
+            //        Resources.ContainerRuntimePrerequisiteMissingExceptionMessage,
+            //        containerRuntime,
+            //        error
+            //    ));
+            //}
+            //else if (!running)
+            //{
+            //    throw new DistributedApplicationException(string.Format(
+            //        CultureInfo.InvariantCulture,
+            //        Resources.ContainerRuntimeUnhealthyExceptionMessage,
+            //        containerRuntime,
+            //        error
+            //    ));
+            //}
 
             // If we get to here all is good!
         }

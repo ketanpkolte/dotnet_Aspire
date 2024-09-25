@@ -5,6 +5,7 @@ using System.Collections.Concurrent;
 using System.Collections.Immutable;
 using System.Data;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Net.Sockets;
 using System.Text.Json;
@@ -16,6 +17,7 @@ using Aspire.Hosting.Dashboard;
 using Aspire.Hosting.Dcp.Model;
 using Aspire.Hosting.Eventing;
 using Aspire.Hosting.Lifecycle;
+using Aspire.Hosting.Properties;
 using Aspire.Hosting.Utils;
 using Json.Patch;
 using k8s;
@@ -128,6 +130,8 @@ internal sealed class ApplicationExecutor(ILogger<ApplicationExecutor> logger,
 
         try
         {
+            EnsureDcpContainerRuntime(_dcpInfo);
+
             PrepareServices();
             PrepareContainers();
             PrepareExecutables();
@@ -139,9 +143,9 @@ internal sealed class ApplicationExecutor(ILogger<ApplicationExecutor> logger,
 
             await CreateServicesAsync(cancellationToken).ConfigureAwait(false);
 
-            await CreateContainerNetworksAsync(cancellationToken).ConfigureAwait(false);
+            await CreateContainerNetworksAsync(_dcpInfo, cancellationToken).ConfigureAwait(false);
 
-            await CreateContainersAndExecutablesAsync(cancellationToken).ConfigureAwait(false);
+            await CreateContainersAndExecutablesAsync(_dcpInfo, cancellationToken).ConfigureAwait(false);
 
             var afterResourcesCreatedEvent = new AfterResourcesCreatedEvent(serviceProvider, _model);
             await eventing.PublishAsync(afterResourcesCreatedEvent, cancellationToken).ConfigureAwait(false);
@@ -940,20 +944,25 @@ internal sealed class ApplicationExecutor(ILogger<ApplicationExecutor> logger,
         }
     }
 
-    private async Task CreateContainerNetworksAsync(CancellationToken cancellationToken)
+    private async Task CreateContainerNetworksAsync(DcpInfo dcpInfo, CancellationToken cancellationToken)
     {
-        var toCreate = _appResources.Where(r => r.DcpResource is ContainerNetwork);
-        foreach (var containerNetwork in toCreate)
+        if (dcpInfo.Containers?.Running == true)
         {
-            if (containerNetwork.DcpResource is ContainerNetwork cn)
+            var toCreate = _appResources.Where(r => r.DcpResource is ContainerNetwork);
+            foreach (var containerNetwork in toCreate)
             {
-                await kubernetesService.CreateAsync(cn, cancellationToken).ConfigureAwait(false);
+                if (containerNetwork.DcpResource is ContainerNetwork cn)
+                {
+                    await kubernetesService.CreateAsync(cn, cancellationToken).ConfigureAwait(false);
+                }
             }
         }
     }
 
-    private async Task CreateContainersAndExecutablesAsync(CancellationToken cancellationToken)
+    private async Task CreateContainersAndExecutablesAsync(DcpInfo dcpInfo, CancellationToken cancellationToken)
     {
+        var startContainers = _dcpInfo?.Containers?.Running == true;
+
         var toCreate = _appResources.Where(r => r.DcpResource is Container || r.DcpResource is Executable || r.DcpResource is ExecutableReplicaSet);
         AddAllocatedEndpointInfo(toCreate);
 
@@ -965,7 +974,8 @@ internal sealed class ApplicationExecutor(ILogger<ApplicationExecutor> logger,
             await lifecycleHook.AfterEndpointsAllocatedAsync(_model, cancellationToken).ConfigureAwait(false);
         }
 
-        var containersTask = CreateContainersAsync(toCreate.Where(ar => ar.DcpResource is Container), cancellationToken);
+        var containersTask = CreateContainersAsync(toCreate.Where(ar => ar.DcpResource is Container), dcpInfo, cancellationToken);
+        
         var executablesTask = CreateExecutablesAsync(toCreate.Where(ar => ar.DcpResource is Executable || ar.DcpResource is ExecutableReplicaSet), cancellationToken);
 
         await Task.WhenAll(containersTask, executablesTask).ConfigureAwait(false);
@@ -1447,10 +1457,19 @@ internal sealed class ApplicationExecutor(ILogger<ApplicationExecutor> logger,
                 ctr.Spec.Persistent = true;
             }
 
+            var containerHostRunning = _dcpInfo?.Containers?.Running == true;
+
             ctr.Annotate(CustomResource.ResourceNameAnnotation, container.Name);
             ctr.Annotate(CustomResource.OtelServiceNameAnnotation, container.Name);
             ctr.Annotate(CustomResource.OtelServiceInstanceIdAnnotation, nameSuffix);
-            SetInitialResourceState(container, ctr);
+            if (containerHostRunning)
+            {
+                ctr.Annotate(CustomResource.ResourceStateAnnotation, KnownResourceStates.FailedToStart);
+            }
+            else
+            {
+                SetInitialResourceState(container, ctr);
+            }
 
             if (container.TryGetContainerMounts(out var containerMounts))
             {
@@ -1485,7 +1504,7 @@ internal sealed class ApplicationExecutor(ILogger<ApplicationExecutor> logger,
         }
     }
 
-    private Task CreateContainersAsync(IEnumerable<AppResource> containerResources, CancellationToken cancellationToken)
+    private Task CreateContainersAsync(IEnumerable<AppResource> containerResources, DcpInfo dcpInfo, CancellationToken cancellationToken)
     {
         try
         {
@@ -1496,42 +1515,43 @@ internal sealed class ApplicationExecutor(ILogger<ApplicationExecutor> logger,
                 var logger = loggerService.GetLogger(cr.ModelResource);
 
                 await notificationService.PublishUpdateAsync(cr.ModelResource, s => s with
-                {
-                    State = "Starting",
-                    Properties = [
-                        new(KnownProperties.Container.Image, cr.ModelResource.TryGetContainerImageName(out var imageName) ? imageName : ""),
-                   ],
-                    ResourceType = KnownResourceTypes.Container
-                })
-                .ConfigureAwait(false);
+                    {
+                        State = KnownResourceStates.Starting,
+                        Properties = [
+                                new(KnownProperties.Container.Image, cr.ModelResource.TryGetContainerImageName(out var imageName) ? imageName : ""),
+                            ],
+                        ResourceType = KnownResourceTypes.Container
+                    })
+                    .ConfigureAwait(false);
 
-                await SetChildResourceAsync(cr.ModelResource, state: "Starting", startTimeStamp: null, stopTimeStamp: null).ConfigureAwait(false);
+                await SetChildResourceAsync(cr.ModelResource, state: KnownResourceStates.Starting, startTimeStamp: null, stopTimeStamp: null).ConfigureAwait(false);
 
                 try
                 {
-                    await CreateContainerAsync(cr, logger, cancellationToken).ConfigureAwait(false);
+                    await CreateContainerAsync(cr, dcpInfo, logger, cancellationToken).ConfigureAwait(false);
                 }
                 catch (FailedToApplyEnvironmentException)
                 {
                     // For this exception we don't want the noise of the stack trace, we've already
                     // provided more detail where we detected the issue (e.g. envvar name). To get
                     // more diagnostic information reduce logging level for DCP log category to Debug.
-                    await notificationService.PublishUpdateAsync(cr.ModelResource, s => s with { State = "FailedToStart" }).ConfigureAwait(false);
+                    await notificationService.PublishUpdateAsync(cr.ModelResource, s => s with { State = KnownResourceStates.FailedToStart }).ConfigureAwait(false);
                 }
                 catch (Exception ex)
                 {
                     logger.LogError(ex, "Failed to create container resource {ResourceName}", cr.ModelResource.Name);
 
-                    await notificationService.PublishUpdateAsync(cr.ModelResource, s => s with { State = "FailedToStart" }).ConfigureAwait(false);
+                    await notificationService.PublishUpdateAsync(cr.ModelResource, s => s with { State = KnownResourceStates.FailedToStart }).ConfigureAwait(false);
 
-                    await SetChildResourceAsync(cr.ModelResource, state: "FailedToStart", startTimeStamp: null, stopTimeStamp: null).ConfigureAwait(false);
+                    await SetChildResourceAsync(cr.ModelResource, state: KnownResourceStates.FailedToStart, startTimeStamp: null, stopTimeStamp: null).ConfigureAwait(false);
                 }
             }
 
             var tasks = new List<Task>();
 
             // Create a custom container network for Aspire if there are container resources
-            if (containerResources.Any())
+            var containerHostRunning = _dcpInfo?.Containers?.Running == true;
+            if (containerHostRunning && containerResources.Any())
             {
                 // The network will be created with a unique postfix to avoid conflicts with other Aspire AppHost networks
                 tasks.Add(kubernetesService.CreateAsync(ContainerNetwork.Create(DefaultAspireNetworkName), cancellationToken));
@@ -1550,7 +1570,7 @@ internal sealed class ApplicationExecutor(ILogger<ApplicationExecutor> logger,
         }
     }
 
-    private async Task CreateContainerAsync(AppResource cr, ILogger resourceLogger, CancellationToken cancellationToken)
+    private async Task CreateContainerAsync(AppResource cr, DcpInfo dcpInfo, ILogger resourceLogger, CancellationToken cancellationToken)
     {
         if (cr.ModelResource is IResourceWithConnectionString)
         {
@@ -1717,7 +1737,68 @@ internal sealed class ApplicationExecutor(ILogger<ApplicationExecutor> logger,
             throw new FailedToApplyEnvironmentException();
         }
 
-        await kubernetesService.CreateAsync(dcpContainerResource, cancellationToken).ConfigureAwait(false);
+        if (IsContainerRuntimeHealthy(_options.Value, dcpInfo, out var containerRuntimeError))
+        {
+            await kubernetesService.CreateAsync(dcpContainerResource, cancellationToken).ConfigureAwait(false);
+        }
+        else
+        {
+            throw new DistributedApplicationException(containerRuntimeError);
+        }
+    }
+
+    private void EnsureDcpContainerRuntime(DcpInfo dcpInfo)
+    {
+        // If we don't have any resources that need a container then we
+        // don't need to check for a healthy container runtime.
+        if (!_applicationModel.Any(r => r.Value.IsContainer()))
+        {
+            return;
+        }
+
+        AspireEventSource.Instance.ContainerRuntimeHealthCheckStart();
+
+        try
+        {
+            if (!IsContainerRuntimeHealthy(_options.Value, dcpInfo, out var errorMessage))
+            {
+                if (!_distributedApplicationOptions.DashboardEnabled)
+                {
+                    throw new DistributedApplicationException(errorMessage);
+                }
+                else
+                {
+                    _logger.LogError(errorMessage);
+                }
+            }
+
+            // If we get to here all is good!
+        }
+        finally
+        {
+            AspireEventSource.Instance?.ContainerRuntimeHealthCheckStop();
+        }
+    }
+
+    private static bool IsContainerRuntimeHealthy(DcpOptions dcpOptions, DcpInfo dcpInfo, [NotNullWhen(false)] out string? errorMessage)
+    {
+        var containerRuntime = dcpOptions.ContainerRuntime;
+        if (string.IsNullOrEmpty(containerRuntime))
+        {
+            // Default runtime is Docker
+            containerRuntime = "docker";
+        }
+
+        var installed = dcpInfo.Containers?.Installed ?? false;
+        var running = dcpInfo.Containers?.Running ?? false;
+        var error = dcpInfo.Containers?.Error;
+        errorMessage = !installed
+            ? string.Format(CultureInfo.InvariantCulture, Resources.ContainerRuntimePrerequisiteMissingExceptionMessage, containerRuntime, error)
+            : !running
+                ? string.Format(CultureInfo.InvariantCulture, Resources.ContainerRuntimeUnhealthyExceptionMessage, containerRuntime, error)
+                : null;
+
+        return errorMessage is null;
     }
 
     private static async Task ApplyBuildArgumentsAsync(Container dcpContainerResource, IResource modelContainerResource, CancellationToken cancellationToken)

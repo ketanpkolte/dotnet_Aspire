@@ -26,13 +26,15 @@ Pour plus d’informations sur les runtimes de conteneur pris en charge, consult
         <note />
       </trans-unit>
       <trans-unit id="ContainerRuntimeUnhealthyExceptionMessage">
-        <source>Container runtime '{0}' was found but appears to be unhealthy. The error from the container runtime check was {1}.</source>
-        <target state="translated">Le runtime de conteneur « {0} » a été trouvé, mais il semble qu’il ne soit pas sain. L’erreur à partir de la vérification du runtime du conteneur était {1}.</target>
+        <source>Container runtime '{0}' was found but appears to be unhealthy, e.g. stopped. Ensure the container runtime is running and try again.
+The error from the container runtime check was: {1}.</source>
+        <target state="needs-review-translation">Le runtime de conteneur « {0} » a été trouvé, mais il semble qu’il ne soit pas sain. L’erreur à partir de la vérification du runtime du conteneur était {1}.</target>
         <note />
       </trans-unit>
       <trans-unit id="ContainerRuntimeUnresponsiveExceptionMessage">
-        <source>Container runtime '{0}' was found but appears to be unresponsive. The command '{0}' did not return after {1} seconds.</source>
-        <target state="translated">Le runtime de conteneur « {0} » a été trouvé, mais il semble qu’il ne réponde pas. La commande « {0} » n’a pas été retournée après {1} secondes.</target>
+        <source>Container runtime '{0}' was found but appears to be unresponsive.
+The command '{0}' did not return after {1} seconds.</source>
+        <target state="needs-review-translation">Le runtime de conteneur « {0} » a été trouvé, mais il semble qu’il ne réponde pas. La commande « {0} » n’a pas été retournée après {1} secondes.</target>
         <note />
       </trans-unit>
       <trans-unit id="DcpDependencyCheckFailedMessage">

@@ -25,13 +25,15 @@ See https://aka.ms/dotnet/aspire/containers for more details on supported contai
         <note />
       </trans-unit>
       <trans-unit id="ContainerRuntimeUnhealthyExceptionMessage">
-        <source>Container runtime '{0}' was found but appears to be unhealthy. The error from the container runtime check was {1}.</source>
-        <target state="translated">找到了容器執行階段 '{0}'，但似乎狀況不良。容器執行階段檢查中的錯誤為 {1}。</target>
+        <source>Container runtime '{0}' was found but appears to be unhealthy, e.g. stopped. Ensure the container runtime is running and try again.
+The error from the container runtime check was: {1}.</source>
+        <target state="needs-review-translation">找到了容器執行階段 '{0}'，但似乎狀況不良。容器執行階段檢查中的錯誤為 {1}。</target>
         <note />
       </trans-unit>
       <trans-unit id="ContainerRuntimeUnresponsiveExceptionMessage">
-        <source>Container runtime '{0}' was found but appears to be unresponsive. The command '{0}' did not return after {1} seconds.</source>
-        <target state="translated">已找到容器執行階段 '{0}'，但似乎無回應。命令 '{0}' 在 {1} 秒後未傳回。</target>
+        <source>Container runtime '{0}' was found but appears to be unresponsive.
+The command '{0}' did not return after {1} seconds.</source>
+        <target state="needs-review-translation">已找到容器執行階段 '{0}'，但似乎無回應。命令 '{0}' 在 {1} 秒後未傳回。</target>
         <note />
       </trans-unit>
       <trans-unit id="DcpDependencyCheckFailedMessage">

@@ -25,13 +25,15 @@ Další podrobnosti o podporovaných modulech runtime kontejnerů najdete na htt
         <note />
       </trans-unit>
       <trans-unit id="ContainerRuntimeUnhealthyExceptionMessage">
-        <source>Container runtime '{0}' was found but appears to be unhealthy. The error from the container runtime check was {1}.</source>
-        <target state="translated">Modul runtime kontejneru {0} byl nalezen, ale zdá se, že není v pořádku. Chyba z kontroly modulu runtime kontejneru byla: {1}.</target>
+        <source>Container runtime '{0}' was found but appears to be unhealthy, e.g. stopped. Ensure the container runtime is running and try again.
+The error from the container runtime check was: {1}.</source>
+        <target state="needs-review-translation">Modul runtime kontejneru {0} byl nalezen, ale zdá se, že není v pořádku. Chyba z kontroly modulu runtime kontejneru byla: {1}.</target>
         <note />
       </trans-unit>
       <trans-unit id="ContainerRuntimeUnresponsiveExceptionMessage">
-        <source>Container runtime '{0}' was found but appears to be unresponsive. The command '{0}' did not return after {1} seconds.</source>
-        <target state="translated">Modul runtime kontejneru {0} byl nalezen, ale zdá se, že nereaguje. Příkaz {0} po {1} sekundách nevrátil žádný výsledek.</target>
+        <source>Container runtime '{0}' was found but appears to be unresponsive.
+The command '{0}' did not return after {1} seconds.</source>
+        <target state="needs-review-translation">Modul runtime kontejneru {0} byl nalezen, ale zdá se, že nereaguje. Příkaz {0} po {1} sekundách nevrátil žádný výsledek.</target>
         <note />
       </trans-unit>
       <trans-unit id="DcpDependencyCheckFailedMessage">

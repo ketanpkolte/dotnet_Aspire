@@ -98,7 +98,8 @@ namespace Aspire.Hosting.Properties {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Container runtime &apos;{0}&apos; was found but appears to be unhealthy. The error from the container runtime check was {1}..
+        ///   Looks up a localized string similar to Container runtime &apos;{0}&apos; was found but appears to be unhealthy, e.g. stopped. Ensure the container runtime is running and try again.
+        ///The error from the container runtime check was: {1}..
         /// </summary>
         internal static string ContainerRuntimeUnhealthyExceptionMessage {
             get {
@@ -107,7 +108,8 @@ namespace Aspire.Hosting.Properties {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Container runtime &apos;{0}&apos; was found but appears to be unresponsive. The command &apos;{0}&apos; did not return after {1} seconds..
+        ///   Looks up a localized string similar to Container runtime &apos;{0}&apos; was found but appears to be unresponsive.
+        ///The command &apos;{0}&apos; did not return after {1} seconds..
         /// </summary>
         internal static string ContainerRuntimeUnresponsiveExceptionMessage {
             get {
