@@ -133,8 +133,8 @@ internal sealed class ApplicationExecutor(ILogger<ApplicationExecutor> logger,
             EnsureDcpContainerRuntime(_dcpInfo);
 
             PrepareServices();
-            PrepareContainers();
-            PrepareExecutables();
+            PrepareContainers(_options.Value, _dcpInfo);
+            PrepareExecutables(_options.Value, _dcpInfo);
 
             await PublishResourcesWithInitialStateAsync().ConfigureAwait(false);
 
@@ -1050,19 +1050,19 @@ internal sealed class ApplicationExecutor(ILogger<ApplicationExecutor> logger,
         }
     }
 
-    private void PrepareExecutables()
+    private void PrepareExecutables(DcpOptions dcpOptions, DcpInfo dcpInfo)
     {
-        PrepareProjectExecutables();
-        PreparePlainExecutables();
+        PrepareProjectExecutables(dcpOptions, dcpInfo);
+        PreparePlainExecutables(dcpOptions, dcpInfo);
     }
 
-    private void PreparePlainExecutables()
+    private void PreparePlainExecutables(DcpOptions dcpOptions, DcpInfo dcpInfo)
     {
         var modelExecutableResources = _model.GetExecutableResources();
 
         foreach (var executable in modelExecutableResources)
         {
-            EnsureRequiredAnnotations(executable);
+            EnsureRequiredAnnotations(executable, dcpOptions, dcpInfo);
 
             var nameSuffix = GetRandomNameSuffix();
             var exeName = GetObjectNameForResource(executable, nameSuffix);
@@ -1083,7 +1083,7 @@ internal sealed class ApplicationExecutor(ILogger<ApplicationExecutor> logger,
         }
     }
 
-    private void PrepareProjectExecutables()
+    private void PrepareProjectExecutables(DcpOptions dcpOptions, DcpInfo dcpInfo)
     {
         var modelProjectResources = _model.GetProjectResources();
 
@@ -1094,7 +1094,7 @@ internal sealed class ApplicationExecutor(ILogger<ApplicationExecutor> logger,
                 throw new InvalidOperationException("A project resource is missing required metadata"); // Should never happen.
             }
 
-            EnsureRequiredAnnotations(project);
+            EnsureRequiredAnnotations(project, dcpOptions, dcpInfo);
 
             var replicas = project.GetReplicaCount();
 
@@ -1185,10 +1185,14 @@ internal sealed class ApplicationExecutor(ILogger<ApplicationExecutor> logger,
         }
     }
 
-    private static void EnsureRequiredAnnotations(IResource resource)
+    private static void EnsureRequiredAnnotations(IResource resource, DcpOptions dcpOptions, DcpInfo dcpInfo)
     {
-        // Add the default lifecycle commands (start/stop/restart)
-        resource.AddLifeCycleCommands();
+        // Don't add the lifecycle commands for container resources if the container runtime is unhealthy
+        if (resource is not ContainerResource || IsContainerRuntimeHealthy(dcpOptions, dcpInfo, out var _))
+        {
+            // Add the default lifecycle commands (start/stop/restart)
+            resource.AddLifeCycleCommands();
+        }
 
         // Make sure we have a replica annotation on the resource.
         // this is so that we can populate the running instance ids
@@ -1420,7 +1424,7 @@ internal sealed class ApplicationExecutor(ILogger<ApplicationExecutor> logger,
         return value;
     }
 
-    private void PrepareContainers()
+    private void PrepareContainers(DcpOptions dcpOptions, DcpInfo dcpInfo)
     {
         var modelContainerResources = _model.GetContainerResources();
 
@@ -1434,7 +1438,7 @@ internal sealed class ApplicationExecutor(ILogger<ApplicationExecutor> logger,
                 throw new InvalidOperationException();
             }
 
-            EnsureRequiredAnnotations(container);
+            EnsureRequiredAnnotations(container, dcpOptions, dcpInfo);
 
             var nameSuffix = container.GetContainerLifetimeType() switch
             {
