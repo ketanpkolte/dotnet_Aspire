@@ -64,7 +64,7 @@ public static class AspireAzureOpenAIChatClientExtensions
         if (configuration.GetConnectionString(connectionName) is string connectionString)
         {
             var connectionBuilder = new DbConnectionStringBuilder { ConnectionString = connectionString };
-            deploymentName = (connectionBuilder[DeployentKey] ?? connectionBuilder[ModelKey]).ToString();
+            deploymentName = (connectionBuilder[DeployentKey] ?? connectionBuilder[ModelKey])?.ToString();
         }
 
         var configurationSectionName = AspireAzureOpenAIExtensions.DefaultConfigSectionName;
