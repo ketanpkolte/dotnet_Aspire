@@ -9,6 +9,8 @@ param outputs_managed_identity_client_id string
 
 param outputs_azure_container_apps_environment_id string
 
+param outputs_azure_container_apps_environment_name string
+
 resource cache 'Microsoft.App/containerApps@2024-03-01' = {
   name: 'cache'
   location: location

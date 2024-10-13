@@ -1,6 +1,13 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
+using Azure.Provisioning;
+using Azure.Provisioning.AppContainers;
+using Azure.Provisioning.Expressions;
+
 var builder = DistributedApplication.CreateBuilder(args);
+
+var customDomain = builder.AddParameter("customDomain");
+var certificateName = builder.AddParameter("certificateName");
 
 // Testing secret parameters
 var param = builder.AddParameter("secretparam", "fakeSecret", secret: true);
@@ -28,6 +35,44 @@ builder.AddProject<Projects.AzureContainerApps_ApiService>("api")
        .WithEnvironment("VALUE", param)
        .PublishAsAzureContainerApp((module, app) =>
        {
+           var containerAppManagedEnvironmentIdParameter = module.GetResources().OfType<ProvisioningParameter>().Single(
+                p => p.IdentifierName == "outputs_azure_container_apps_environment_id");
+           var certificatNameParameter = certificateName.AsProvisioningParameter(module);
+           var customDomainParameter = customDomain.AsProvisioningParameter(module);
+
+           var bindingTypeConditional = new ConditionalExpression(
+               new BinaryExpression(
+                   new IdentifierExpression(certificatNameParameter.IdentifierName),
+                   BinaryOperator.NotEqual,
+                   new StringLiteral(string.Empty)),
+               new StringLiteral("SniEnabled"),
+               new StringLiteral("Disabled")
+               );
+
+           var certificateOrEmpty = new ConditionalExpression(
+               new BinaryExpression(
+                   new IdentifierExpression(certificatNameParameter.IdentifierName),
+                   BinaryOperator.NotEqual,
+                   new StringLiteral(string.Empty)),
+               new InterpolatedString(
+                   "{0}/managedCertificates/{1}",
+                   [
+                    new IdentifierExpression(containerAppManagedEnvironmentIdParameter.IdentifierName),
+                    new IdentifierExpression(certificatNameParameter.IdentifierName)
+                    ]),
+               new NullLiteral()
+               );
+
+           app.Configuration.Value!.Ingress!.Value!.CustomDomains = new Azure.Provisioning.BicepList<ContainerAppCustomDomain>()
+           {
+                new ContainerAppCustomDomain()
+                {
+                    BindingType = bindingTypeConditional,
+                    Name = new IdentifierExpression(customDomainParameter.IdentifierName),
+                    CertificateId = certificateOrEmpty
+                }
+           };
+
            // Scale to 0
            app.Template.Value!.Scale.Value!.MinReplicas = 0;
        });

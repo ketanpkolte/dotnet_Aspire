@@ -16,9 +16,15 @@ param outputs_managed_identity_client_id string
 
 param outputs_azure_container_apps_environment_id string
 
+param outputs_azure_container_apps_environment_name string
+
 param outputs_azure_container_registry_endpoint string
 
 param api_containerimage string
+
+param certificateName string
+
+param customDomain string
 
 resource account_secretoutputs_kv 'Microsoft.KeyVault/vaults@2023-07-01' existing = {
   name: account_secretoutputs
@@ -50,6 +56,13 @@ resource api 'Microsoft.App/containerApps@2024-03-01' = {
         external: true
         targetPort: api_containerport
         transport: 'http'
+        customDomains: [
+          {
+            name: customDomain
+            bindingType: (certificateName != '') ? 'SniEnabled' : 'Disabled'
+            certificateId: (certificateName != '') ? '${outputs_azure_container_apps_environment_id}/managedCertificates/${certificateName}' : null
+          }
+        ]
       }
       registries: [
         {
