@@ -35,43 +35,7 @@ builder.AddProject<Projects.AzureContainerApps_ApiService>("api")
        .WithEnvironment("VALUE", param)
        .PublishAsAzureContainerApp((module, app) =>
        {
-           var containerAppManagedEnvironmentIdParameter = module.GetResources().OfType<ProvisioningParameter>().Single(
-                p => p.IdentifierName == "outputs_azure_container_apps_environment_id");
-           var certificatNameParameter = certificateName.AsProvisioningParameter(module);
-           var customDomainParameter = customDomain.AsProvisioningParameter(module);
-
-           var bindingTypeConditional = new ConditionalExpression(
-               new BinaryExpression(
-                   new IdentifierExpression(certificatNameParameter.IdentifierName),
-                   BinaryOperator.NotEqual,
-                   new StringLiteral(string.Empty)),
-               new StringLiteral("SniEnabled"),
-               new StringLiteral("Disabled")
-               );
-
-           var certificateOrEmpty = new ConditionalExpression(
-               new BinaryExpression(
-                   new IdentifierExpression(certificatNameParameter.IdentifierName),
-                   BinaryOperator.NotEqual,
-                   new StringLiteral(string.Empty)),
-               new InterpolatedString(
-                   "{0}/managedCertificates/{1}",
-                   [
-                    new IdentifierExpression(containerAppManagedEnvironmentIdParameter.IdentifierName),
-                    new IdentifierExpression(certificatNameParameter.IdentifierName)
-                    ]),
-               new NullLiteral()
-               );
-
-           app.Configuration.Value!.Ingress!.Value!.CustomDomains = new Azure.Provisioning.BicepList<ContainerAppCustomDomain>()
-           {
-                new ContainerAppCustomDomain()
-                {
-                    BindingType = bindingTypeConditional,
-                    Name = new IdentifierExpression(customDomainParameter.IdentifierName),
-                    CertificateId = certificateOrEmpty
-                }
-           };
+           app.ConfigureCustomDomain(customDomain, certificateName);
 
            // Scale to 0
            app.Template.Value!.Scale.Value!.MinReplicas = 0;
@@ -88,4 +52,3 @@ builder.AddProject<Projects.Aspire_Dashboard>(KnownResourceNames.AspireDashboard
 #endif
 
 builder.Build().Run();
-
